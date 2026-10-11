@@ -93,9 +93,7 @@ Additional hardware setup or configuration may be required depending on the proj
 ## 🚀 Future Improvements
 
 * Improve fall detection accuracy.
-* Add real-time monitoring and alert status.
 * Enhance the web interface.
-* Add event history and reporting.
 * Improve database integration and configuration security.
 
 ## ⚠️ Disclaimer
