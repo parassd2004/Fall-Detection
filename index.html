@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FallGuard — IoT Fall Detection</title>
+
+<!-- Chart.js for live graph -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+/* ── Reset & Base ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep:    #060b14;
+  --bg-card:    #0d1826;
+  --bg-card2:   #111f33;
+  --border:     #1a2d47;
+  --border-lit: #1e3a5a;
+  --accent:     #00d4ff;
+  --accent-dim: #0090b3;
+  --danger:     #ff3b3b;
+  --danger-dim: #7f1d1d;
+  --safe:       #00e676;
+  --safe-dim:   #064e1e;
+  --text-1:     #e8f4f8;
+  --text-2:     #7a9ab5;
+  --text-3:     #3d5a70;
+  --font-mono:  'Courier New', monospace;
+  --radius:     12px;
+  --radius-sm:  8px;
+  --shadow:     0 8px 32px rgba(0,0,0,0.5);
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-1);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ── Auth screens ─────────────────────────────────── */
+#authWrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.12), transparent),
+    var(--bg-deep);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 36px 32px;
+  box-shadow: var(--shadow);
+  animation: fadeUp 0.35s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+.auth-logo-icon {
+  width: 38px; height: 38px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: grid; place-items: center;
+  font-size: 20px;
+}
+.auth-logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.3px;
+}
+.auth-logo-text span { color: var(--accent); }
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 6px;
+}
+.auth-sub {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 28px;
+}
+
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.field input {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.field input:focus { border-color: var(--accent); }
+.field input::placeholder { color: var(--text-3); }
+
+.btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #060b14;
+}
+.btn-primary:hover { background: #22e0ff; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  margin-top: 8px;
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+.auth-link {
+  text-align: center;
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.auth-link a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
+.auth-link a:hover { text-decoration: underline; }
+
+.msg {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 14px;
+  display: none;
+}
+.msg.error   { background: rgba(255,59,59,0.12); border: 1px solid var(--danger); color: #ff8080; }
+.msg.success { background: rgba(0,230,118,0.10); border: 1px solid var(--safe);   color: var(--safe); }
+.msg.show    { display: block; }
+
+.otp-section { display: none; }
+.divider {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12px;
+  margin: 16px 0;
+  position: relative;
+}
+.divider::before, .divider::after {
+  content: '';
+  position: absolute;
+  top: 50%; width: 42%;
+  height: 1px; background: var(--border);
+}
+.divider::before { left: 0; }
+.divider::after  { right: 0; }
+
+/* ── Dashboard layout ─────────────────────────────── */
+#dashWrap { display: none; min-height: 100vh; flex-direction: column; }
+
+/* Topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  height: 60px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; }
+.topbar-logo {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 16px;
+}
+.topbar-name { font-size: 16px; font-weight: 700; }
+.topbar-name span { color: var(--accent); }
+
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+.status-pill {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: all 0.4s;
+}
+.status-pill.safe   { background: var(--safe-dim);   color: var(--safe);   border: 1px solid var(--safe); }
+.status-pill.danger { background: var(--danger-dim); color: var(--danger); border: 1px solid var(--danger); }
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+.status-pill.safe   .status-dot { background: var(--safe); }
+.status-pill.danger .status-dot { background: var(--danger); animation: pulseDanger 0.6s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+@keyframes pulseDanger {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.5); opacity: 0.6; }
+}
+
+.btn-logout {
+  padding: 7px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+/* User greeting */
+.user-bar {
+  padding: 20px 28px 0;
+}
+.user-greeting { font-size: 13px; color: var(--text-2); }
+.user-email    { font-size: 15px; font-weight: 600; color: var(--text-1); }
+
+/* Main grid */
+.dash-main { padding: 20px 28px 40px; flex: 1; }
+
+/* Stat cards row */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border-lit); }
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+.stat-value.danger-text { color: var(--danger); }
+.stat-value.accent-text { color: var(--accent); }
+.stat-sub {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+/* Two-column layout */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-2);
+}
+.card-tag {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(0,212,255,0.1);
+  color: var(--accent);
+  border: 1px solid rgba(0,212,255,0.25);
+}
+.card-body { padding: 20px; }
+
+/* Live readings */
+.reading-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.reading-box {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+.reading-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-2);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.reading-val {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+.reading-unit {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.last-update {
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  padding-top: 4px;
+}
+
+/* Chart */
+.chart-wrap { height: 200px; position: relative; }
+
+/* Right panel */
+.right-col { display: flex; flex-direction: column; gap: 16px; }
+
+/* Fall history list */
+.fall-list { max-height: 320px; overflow-y: auto; }
+.fall-list::-webkit-scrollbar { width: 4px; }
+.fall-list::-webkit-scrollbar-track { background: transparent; }
+.fall-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.fall-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fall-item:last-child { border-bottom: none; }
+.fall-icon {
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: var(--danger-dim);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 14px;
+  border: 1px solid rgba(255,59,59,0.3);
+}
+.fall-info { flex: 1; min-width: 0; }
+.fall-time { font-size: 12px; color: var(--text-2); margin-bottom: 2px; }
+.fall-vals { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); }
+.fall-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(0,230,118,0.1);
+  color: var(--safe);
+  border: 1px solid rgba(0,230,118,0.2);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 20px;
+  color: var(--text-3);
+}
+.empty-state .emoji { font-size: 32px; margin-bottom: 8px; }
+.empty-state p { font-size: 13px; }
+
+/* Connection indicator */
+.conn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg-card2);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.conn-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block; margin-right: 6px;
+}
+.conn-dot.online  { background: var(--safe); box-shadow: 0 0 6px var(--safe); }
+.conn-dot.offline { background: var(--danger); }
+
+/* Fall alert banner */
+.alert-banner {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--danger-dim);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  animation: flashBorder 0.5s infinite alternate;
+}
+@keyframes flashBorder {
+  from { border-color: var(--danger); }
+  to   { border-color: rgba(255,59,59,0.3); }
+}
+.alert-banner.show { display: flex; }
+.alert-banner-icon { font-size: 24px; }
+.alert-banner-text h3 { font-size: 15px; color: var(--danger); font-weight: 700; }
+.alert-banner-text p  { font-size: 12px; color: #ff8080; margin-top: 2px; }
+.alert-dismiss {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(255,59,59,0.4);
+  color: var(--danger);
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.alert-dismiss:hover { background: rgba(255,59,59,0.1); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .stat-row  { grid-template-columns: repeat(2, 1fr); }
+  .dash-grid { grid-template-columns: 1fr; }
+  .right-col { display: grid; grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .dash-main   { padding: 16px; }
+  .topbar      { padding: 0 16px; }
+  .stat-row    { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .right-col   { grid-template-columns: 1fr; }
+  .reading-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     AUTH SECTION
+═══════════════════════════════════════════════════ -->
+<div id="authWrap">
+
+  <!-- REGISTER -->
+  <div class="auth-card" id="registerCard">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🛡️</div>
+      <div class="auth-logo-text">Fall<span>Guard</span></div>
+    </div>
+    <div class="auth-title">Create account</div>
+    <div class="auth-sub">Set up caregiver access for the monitoring system.</div>
+
+    <div id="regMsg" class="msg"></div>
+
+    <div id="regForm">
+      <div class="field">
+        <label>Full Name (optional)</label>
+        <input type="text" id="reg_name" placeholder="e.g. Your Names">
+      </div>
+      <div class="field">
+        <label>Email Address</label>
+        <input type="email" id="reg_email" placeholder="your@email.com">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="reg_pass" placeholder="Min. 6 characters">
+      </div>
+      <button class="btn btn-primary" onclick="sendRegOTP()">Continue</button>
+    </div>
+
+    <div class="otp-section" id="regOTPSection">
+      <div class="divider">Check your inbox</div>
+      <div class="field">
+        <label>Verification Code</label>
+        <input type="text" id="reg_otp" placeholder="6-digit OTP" maxlength="6">
+      </div>
+      <button class="btn btn-primary" onclick="verifyOTP()">Verify & Create Account</button>
+      <button class="btn btn-ghost" onclick="resendOTP()">Resend OTP</button>
+    </div>
+
+    <div class="auth-link">Already have an account? <a onclick="showLogin()">Log in</a></div>
+  </div>
+
+  <!-- LOGIN -->
+  <div class="auth-card" id="loginCard" style="display:none;">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🛡️</div>
+      <div class="auth-logo-text">Fall<span>Guard</span></div>
+    </div>
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-sub">Sign in to access your monitoring dashboard.</div>
+
+    <div id="loginMsg" class="msg"></div>
+
+    <div class="field">
+      <label>Email Address</label>
+      <input type="email" id="log_email" placeholder="your@email.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="log_pass" placeholder="Your password">
+    </div>
+    <button class="btn btn-primary" onclick="login()">Sign In</button>
+
+    <div class="auth-link" style="margin-top:12px;">
+      <a onclick="showForgot()">Forgot password?</a>
+    </div>
+    <div class="auth-link">
+      No account? <a onclick="showRegister()">Register</a>
+    </div>
+  </div>
+
+  <!-- FORGOT PASSWORD -->
+  <div class="auth-card" id="forgotCard" style="display:none;">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🔑</div>
+      <div class="auth-logo-text">Fall<span>Guard</span></div>
+    </div>
+    <div class="auth-title">Reset password</div>
+    <div class="auth-sub">Enter your email to receive a reset code.</div>
+
+    <div id="forgotMsg" class="msg"></div>
+
+    <div id="forgotStep1">
+      <div class="field">
+        <label>Email Address</label>
+        <input type="email" id="fp_email" placeholder="your@email.com">
+      </div>
+      <button class="btn btn-primary" onclick="sendResetOTP()">Send Reset Code</button>
+    </div>
+
+    <div id="forgotStep2" style="display:none;">
+      <div class="divider">Check your inbox</div>
+      <div class="field">
+        <label>Reset Code</label>
+        <input type="text" id="fp_otp" placeholder="6-digit code" maxlength="6">
+      </div>
+      <div class="field">
+        <label>New Password</label>
+        <input type="password" id="fp_newpass" placeholder="Min. 6 characters">
+      </div>
+      <button class="btn btn-primary" onclick="resetPassword()">Update Password</button>
+    </div>
+
+    <div class="auth-link"><a onclick="showLogin()">← Back to sign in</a></div>
+  </div>
+
+</div><!-- /authWrap -->
+
+
+<!-- ══════════════════════════════════════════════════
+     DASHBOARD SECTION
+═══════════════════════════════════════════════════ -->
+<div id="dashWrap">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">🛡️</div>
+      <div class="topbar-name">Fall<span>Guard</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill safe" id="statusPill">
+        <div class="status-dot"></div>
+        <span id="statusText">SAFE</span>
+      </div>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+
+  <!-- User greeting -->
+  <div class="user-bar">
+    <div class="user-greeting">Monitoring dashboard for</div>
+    <div class="user-email" id="userEmail">—</div>
+  </div>
+
+  <!-- Main content -->
+  <main class="dash-main">
+
+    <!-- Fall alert banner (shown when fall detected) -->
+    <div class="alert-banner" id="alertBanner">
+      <div class="alert-banner-icon">⚠️</div>
+      <div class="alert-banner-text">
+        <h3>Fall Detected — Immediate Attention Required</h3>
+        <p>An email alert has been sent to your registered address.</p>
+      </div>
+      <button class="alert-dismiss" onclick="dismissAlert()">Dismiss</button>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Readings</div>
+        <div class="stat-value accent-text" id="statReadings">—</div>
+        <div class="stat-sub">All-time sensor data</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Falls</div>
+        <div class="stat-value" id="statFalls">—</div>
+        <div class="stat-sub">All-time events</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Falls Today</div>
+        <div class="stat-value danger-text" id="statFallsToday">—</div>
+        <div class="stat-sub">Since midnight</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Last Active</div>
+        <div class="stat-value" id="statLastSeen" style="font-size:14px;padding-top:4px;">—</div>
+        <div class="stat-sub">Device last seen</div>
+      </div>
+    </div>
+
+    <!-- Main dashboard grid -->
+    <div class="dash-grid">
+
+      <!-- Left: Live data + chart -->
+      <div>
+        <!-- Live readings card -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title">Live Sensor Readings</span>
+            <span class="card-tag" id="connTag">● CONNECTING</span>
+          </div>
+          <div class="card-body">
+            <div class="reading-grid">
+              <div class="reading-box">
+                <div class="reading-label">Acceleration</div>
+                <div class="reading-val" id="liveAcc">—</div>
+                <div class="reading-unit">g-force</div>
+              </div>
+              <div class="reading-box">
+                <div class="reading-label">Gyroscope</div>
+                <div class="reading-val" id="liveGyro">—</div>
+                <div class="reading-unit">degrees / sec</div>
+              </div>
+            </div>
+            <div class="last-update" id="lastUpdate">Waiting for data...</div>
+          </div>
+        </div>
+
+        <!-- Chart card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Acceleration History</span>
+            <span class="card-tag">Last 30 readings</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-wrap">
+              <canvas id="accChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Fall history + device status -->
+      <div class="right-col">
+
+        <!-- Fall history -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Fall Events</span>
+            <span class="card-tag" id="fallCount">0 total</span>
+          </div>
+          <div class="card-body" style="padding:0 20px;">
+            <div class="fall-list" id="fallList">
+              <div class="empty-state">
+                <div class="emoji">✅</div>
+                <p>No falls recorded yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Device connection status -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Device Status</span>
+          </div>
+          <div class="conn-row">
+            <span>
+              <span class="conn-dot online" id="espDot"></span>
+              ESP32 Device
+            </span>
+            <span id="espStatus" style="color:var(--text-2);font-size:12px;">
+              Checking...
+            </span>
+          </div>
+          <div class="conn-row">
+            <span>
+              <span class="conn-dot online" id="serverDot"></span>
+              Backend Server
+            </span>
+            <span id="serverStatus" style="color:var(--safe);font-size:12px;">
+              Online
+            </span>
+          </div>
+          <div class="conn-row">
+            <span>
+              <span class="conn-dot online"></span>
+              Email Alerts
+            </span>
+            <span style="color:var(--safe);font-size:12px;">Active</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div><!-- /dashWrap -->
+
+
+<script>
+// ── Config ────────────────────────────────────────────
+const BASE = "http://10.10.1.70:8000";
+
+// ── State ─────────────────────────────────────────────
+let token = localStorage.getItem("fg_token") || "";
+let userEmail = localStorage.getItem("fg_email") || "";
+let pollInterval = null;
+let statsInterval = null;
+let chartInstance = null;
+let lastDataTime  = null;
+let alertDismissed = false;
+
+// ── Helper: show message ──────────────────────────────
+function showMsg(id, text, type = "error") {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = `msg ${type} show`;
+}
+function clearMsg(id) {
+    const el = document.getElementById(id);
+    el.className = "msg";
+}
+
+// ── Auth: show/hide screens ───────────────────────────
+function showLogin() {
+    document.getElementById("registerCard").style.display = "none";
+    document.getElementById("forgotCard").style.display   = "none";
+    document.getElementById("loginCard").style.display    = "block";
+    clearMsg("loginMsg");
+}
+function showRegister() {
+    document.getElementById("loginCard").style.display    = "none";
+    document.getElementById("forgotCard").style.display   = "none";
+    document.getElementById("registerCard").style.display = "block";
+    clearMsg("regMsg");
+}
+function showForgot() {
+    document.getElementById("loginCard").style.display    = "none";
+    document.getElementById("registerCard").style.display = "none";
+    document.getElementById("forgotCard").style.display   = "block";
+    clearMsg("forgotMsg");
+}
+
+// ── Register ──────────────────────────────────────────
+async function sendRegOTP() {
+    const email = document.getElementById("reg_email").value.trim();
+    const pass  = document.getElementById("reg_pass").value;
+    const name  = document.getElementById("reg_name").value.trim();
+    clearMsg("regMsg");
+
+    if (!email || !pass) return showMsg("regMsg", "Email and password are required.");
+    if (pass.length < 6) return showMsg("regMsg", "Password must be at least 6 characters.");
+
+    try {
+        const res  = await fetch(`${BASE}/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password: pass, full_name: name })
+        });
+        const data = await res.json();
+        if (!res.ok) return showMsg("regMsg", data.detail);
+
+        showMsg("regMsg", "OTP sent! Check your inbox.", "success");
+        document.getElementById("regForm").style.display      = "none";
+        document.getElementById("regOTPSection").style.display = "block";
+    } catch {
+        showMsg("regMsg", "Cannot reach server. Is the backend running?");
+    }
+}
+
+async function verifyOTP() {
+    const email = document.getElementById("reg_email").value.trim();
+    const otp   = document.getElementById("reg_otp").value.trim();
+    clearMsg("regMsg");
+
+    try {
+        const res  = await fetch(`${BASE}/verify-otp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, otp })
+        });
+        const data = await res.json();
+        if (!res.ok) return showMsg("regMsg", data.detail);
+        showMsg("regMsg", "Account created! You can now log in.", "success");
+        setTimeout(showLogin, 1500);
+    } catch {
+        showMsg("regMsg", "Cannot reach server.");
+    }
+}
+
+async function resendOTP() {
+    const email = document.getElementById("reg_email").value.trim();
+    try {
+        const res  = await fetch(`${BASE}/resend-otp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) return showMsg("regMsg", data.detail);
+        showMsg("regMsg", "New OTP sent!", "success");
+    } catch {
+        showMsg("regMsg", "Cannot reach server.");
+    }
+}
+
+// ── Login ─────────────────────────────────────────────
+async function login() {
+    const email = document.getElementById("log_email").value.trim();
+    const pass  = document.getElementById("log_pass").value;
+    clearMsg("loginMsg");
+
+    if (!email || !pass) return showMsg("loginMsg", "Please enter your email and password.");
+
+    try {
+        const res  = await fetch(`${BASE}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password: pass })
+        });
+        const data = await res.json();
+        if (!res.ok) return showMsg("loginMsg", data.detail);
+
+        // Save session
+        token     = data.token;
+        userEmail = data.email;
+        localStorage.setItem("fg_token", token);
+        localStorage.setItem("fg_email", email);
+
+        enterDashboard(data.name || email);
+    } catch {
+        showMsg("loginMsg", "Cannot reach server. Is the backend running?");
+    }
+}
+
+// ── Forgot / Reset password ───────────────────────────
+async function sendResetOTP() {
+    const email = document.getElementById("fp_email").value.trim();
+    clearMsg("forgotMsg");
+    if (!email) return showMsg("forgotMsg", "Enter your email address.");
+
+    try {
+        const res  = await fetch(`${BASE}/forgot-password`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) return showMsg("forgotMsg", data.detail);
+        showMsg("forgotMsg", "Reset code sent to your email.", "success");
+        document.getElementById("forgotStep1").style.display = "none";
+        document.getElementById("forgotStep2").style.display = "block";
+    } catch {
+        showMsg("forgotMsg", "Cannot reach server.");
+    }
+}
+
+async function resetPassword() {
+    const email    = document.getElementById("fp_email").value.trim();
+    const otp      = document.getElementById("fp_otp").value.trim();
+    const newpass  = document.getElementById("fp_newpass").value;
+    clearMsg("forgotMsg");
+
+    try {
+        const res  = await fetch(`${BASE}/reset-password`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, otp, new_password: newpass })
+        });
+        const data = await res.json();
+        if (!res.ok) return showMsg("forgotMsg", data.detail);
+        showMsg("forgotMsg", "Password updated! Redirecting to login...", "success");
+        setTimeout(showLogin, 1500);
+    } catch {
+        showMsg("forgotMsg", "Cannot reach server.");
+    }
+}
+
+// ── Dashboard entry ───────────────────────────────────
+function enterDashboard(name) {
+    document.getElementById("authWrap").style.display = "none";
+    document.getElementById("dashWrap").style.display = "flex";
+    document.getElementById("userEmail").textContent  = name || userEmail;
+
+    initChart();
+    startPolling();
+    loadFallHistory();
+    loadStats();
+}
+
+// ── Chart setup ───────────────────────────────────────
+function initChart() {
+    const ctx = document.getElementById("accChart").getContext("2d");
+    chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: "Acceleration (g)",
+                    data: [],
+                    borderColor: "#00d4ff",
+                    backgroundColor: "rgba(0,212,255,0.06)",
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: "Fall Threshold (2.5g)",
+                    data: [],
+                    borderColor: "rgba(255,59,59,0.5)",
+                    borderWidth: 1,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 300 },
+            plugins: {
+                legend: {
+                    labels: { color: "#7a9ab5", font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: "#3d5a70", maxTicksLimit: 8, font: { size: 10 } },
+                    grid:  { color: "#1a2d47" }
+                },
+                y: {
+                    ticks: { color: "#3d5a70", font: { size: 10 } },
+                    grid:  { color: "#1a2d47" },
+                    min: 0, max: 6
+                }
+            }
+        }
+    });
+}
+
+function updateChart(historyData) {
+    if (!chartInstance) return;
+    const labels = historyData.map(d => {
+        const t = new Date(d.time);
+        return t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    });
+    const accVals   = historyData.map(d => d.acc);
+    const threshold = historyData.map(() => 2.5);
+
+    chartInstance.data.labels              = labels;
+    chartInstance.data.datasets[0].data    = accVals;
+    chartInstance.data.datasets[1].data    = threshold;
+    chartInstance.update("none");
+}
+
+// ── Polling live data ─────────────────────────────────
+function startPolling() {
+    fetchLatest();
+    fetchHistory();
+    pollInterval = setInterval(fetchLatest, 2000);
+    statsInterval = setInterval(() => {
+        fetchHistory();
+        loadStats();
+        loadFallHistory();
+    }, 15000);
+}
+
+async function fetchLatest() {
+    try {
+        const res = await fetch(`${BASE}/latest`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) return;
+
+        const d = await res.json();
+        if (d.status === "no_data") {
+            document.getElementById("lastUpdate").textContent = "No data from device yet.";
+            return;
+        }
+
+        // Update live readings
+        document.getElementById("liveAcc").textContent  = d.acc.toFixed(3);
+        document.getElementById("liveGyro").textContent = d.gyro.toFixed(3);
+
+        const t = new Date(d.time);
+        document.getElementById("lastUpdate").textContent =
+            "Last updated: " + t.toLocaleTimeString();
+
+        lastDataTime = Date.now();
+        updateDeviceStatus(true);
+
+        // Update status pill
+        const pill   = document.getElementById("statusPill");
+        const sText  = document.getElementById("statusText");
+        const connTag = document.getElementById("connTag");
+
+        connTag.textContent = "● LIVE";
+        connTag.style.color = "var(--safe)";
+
+        if (d.fall === 1) {
+            pill.className       = "status-pill danger";
+            sText.textContent    = "FALL DETECTED";
+            if (!alertDismissed) {
+                document.getElementById("alertBanner").classList.add("show");
+                playAlertSound();
+                sendBrowserNotification();
+            }
+        } else {
+            pill.className    = "status-pill safe";
+            sText.textContent = "SAFE";
+            alertDismissed    = false;
+            document.getElementById("alertBanner").classList.remove("show");
+        }
+
+    } catch {
+        updateDeviceStatus(false);
+    }
+}
+
+async function fetchHistory() {
+    try {
+        const res = await fetch(`${BASE}/sensor/history?limit=30`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        updateChart(data);
+    } catch {}
+}
+
+// ── Fall history list ─────────────────────────────────
+async function loadFallHistory() {
+    try {
+        const res = await fetch(`${BASE}/falls?limit=10`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const falls = await res.json();
+
+        document.getElementById("fallCount").textContent =
+            falls.length + " total";
+
+        const list = document.getElementById("fallList");
+        if (falls.length === 0) {
+            list.innerHTML = `
+                <div class="empty-state">
+                    <div class="emoji">✅</div>
+                    <p>No falls recorded yet</p>
+                </div>`;
+            return;
+        }
+
+        list.innerHTML = falls.map(f => {
+            const t = new Date(f.time);
+            return `
+            <div class="fall-item">
+                <div class="fall-icon">⚠️</div>
+                <div class="fall-info">
+                    <div class="fall-time">${t.toLocaleString()}</div>
+                    <div class="fall-vals">
+                        Acc: ${f.acc.toFixed(2)}g &nbsp;|&nbsp; Gyro: ${f.gyro.toFixed(1)}°/s
+                    </div>
+                </div>
+                ${f.email_sent
+                    ? '<span class="fall-badge">Email ✓</span>'
+                    : ''}
+            </div>`;
+        }).join("");
+    } catch {}
+}
+
+// ── Stats cards ───────────────────────────────────────
+async function loadStats() {
+    try {
+        const res = await fetch(`${BASE}/stats`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const s = await res.json();
+
+        document.getElementById("statReadings").textContent  = s.total_readings ?? "—";
+        document.getElementById("statFalls").textContent     = s.total_falls ?? "0";
+        document.getElementById("statFallsToday").textContent = s.falls_today ?? "0";
+
+        if (s.last_seen) {
+            const t = new Date(s.last_seen);
+            document.getElementById("statLastSeen").textContent =
+                t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
+    } catch {}
+}
+
+// ── Device status indicator ───────────────────────────
+function updateDeviceStatus(online) {
+    const dot    = document.getElementById("espDot");
+    const status = document.getElementById("espStatus");
+    if (online) {
+        dot.className    = "conn-dot online";
+        status.textContent = "Online";
+        status.style.color = "var(--safe)";
+    } else {
+        // Only mark offline if no data for > 10 seconds
+        if (lastDataTime && Date.now() - lastDataTime > 10000) {
+            dot.className    = "conn-dot offline";
+            status.textContent = "No signal";
+            status.style.color = "var(--danger)";
+        }
+    }
+}
+
+// ── Alert helpers ─────────────────────────────────────
+function dismissAlert() {
+    alertDismissed = true;
+    document.getElementById("alertBanner").classList.remove("show");
+}
+
+function playAlertSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        [440, 880, 440].forEach((freq, i) => {
+            const osc  = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.2);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.15);
+            osc.start(ctx.currentTime + i * 0.2);
+            osc.stop(ctx.currentTime + i * 0.2 + 0.2);
+        });
+    } catch {}
+}
+
+function sendBrowserNotification() {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+        new Notification("⚠️ FALL DETECTED", {
+            body: "Patient may need immediate assistance.",
+            icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚠️</text></svg>"
+        });
+    } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(p => {
+            if (p === "granted") sendBrowserNotification();
+        });
+    }
+}
+
+// ── Logout ────────────────────────────────────────────
+async function logout() {
+    try {
+        await fetch(`${BASE}/logout`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+    } catch {}
+    clearInterval(pollInterval);
+    clearInterval(statsInterval);
+    token     = "";
+    userEmail = "";
+    sessionStorage.clear();
+    location.reload();
+}
+
+// ── Auto-login from session ───────────────────────────
+(async function init() {
+    if (!token) return;
+    try {
+        const res = await fetch(`${BASE}/me`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) { sessionStorage.clear(); return; }
+        const u = await res.json();
+        enterDashboard(u.name || u.email);
+    } catch {
+        sessionStorage.clear();
+    }
+})();
+
+// Request notification permission early
+if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+}
+</script>
+</body>
+</html>
